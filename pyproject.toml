@@ -17,10 +17,6 @@ requests = "^2.32.3"
 [tool.poetry.group.dev.dependencies]
 python-semantic-release = "^9.14.0"
 
-[tool.semantic_release]
-version_toml = [
-    "pyproject.toml:tool.poetry.version",
-]                                                    # version location
 branch = "main"                                      # branch to make releases of
 changelog_file = "CHANGELOG.md"                      # changelog file
 build_command = "pip install poetry && poetry build" # build dists 
