@@ -10,8 +10,13 @@ readme = "README.md"
 python = "^3.10"
 pandas = "^2.2.3"
 pybacktestchain = "^0.2.1"
+requests = "^2.32.3"
 
 [tool.poetry.dev-dependencies]
+
+[tool.poetry.group.dev.dependencies]
+python-semantic-release = "^9.14.0"
+
 [tool.semantic_release]
 version_toml = [
     "pyproject.toml:tool.poetry.version",
@@ -23,3 +28,8 @@ build_command = "pip install poetry && poetry build" # build dists
 [build-system]
 requires = ["poetry-core>=1.0.0"]
 build-backend = "poetry.core.masonry.api"
+[tool.semantic_release] 
+version_variable = "pyproject.toml:version" 
+version_toml = [ 
+"pyproject.toml:tool.poetry.version", 
+] 
