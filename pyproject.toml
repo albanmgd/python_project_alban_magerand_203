@@ -13,6 +13,9 @@ pybacktestchain = "^0.2.1"
 requests = "^2.32.3"
 pytest = "^8.3.3"
 pytest-cov = "^6.0.0"
+sphinx = "^8.1.3"
+myst-nb = "^1.1.2"
+autoapi = "^2.0.1"
 
 [tool.poetry.dev-dependencies]
 
