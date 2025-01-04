@@ -18,6 +18,8 @@ myst-nb = "^1.1.2"
 autoapi = "^2.0.1"
 sphinx-autoapi = "^3.3.3"
 sphinx-rtd-theme = "^3.0.2"
+dash = "^2.18.2"
+numba = "^0.60.0"
 
 [tool.poetry.dev-dependencies]
 

@@ -1,2 +1,5 @@
-if __name__ == "__main__":
-    print("Trying update package!")
+import pytest
+
+def test_all():
+    # pytest, folder is tests
+    pytest.main(['tests'])
