@@ -1,4 +1,5 @@
 import pandas as pd
+import numpy as np
 import logging
 import os
 from pybacktestchain.broker import StopLoss
@@ -6,7 +7,7 @@ from pybacktestchain.data_module import FirstTwoMoments, get_stocks_data, DataMo
 from pybacktestchain.utils import generate_random_name
 from pybacktestchain.broker import EndOfMonth, Broker
 from datetime import datetime, timedelta
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from glob import  glob
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
@@ -15,7 +16,7 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 class Backtest:
     initial_date: datetime
     final_date: datetime
-    universe = ['AAPL', 'MSFT', 'GOOGL', 'AMZN', 'META', 'TSLA', 'NVDA', 'INTC', 'CSCO', 'NFLX']
+    universe: list = field(default_factory=lambda:  ['AAPL', 'NFLX'])
     information_class: type = Information
     s: timedelta = timedelta(days=360)
     time_column: str = 'Date'
@@ -35,7 +36,7 @@ class Backtest:
     def run_backtest(self):
         logging.info(f"Running backtest from {self.initial_date} to {self.final_date}.")
         logging.info(f"Retrieving price data for universe")
-        self.risk_model = self.risk_model(threshold=0.1)
+
         # self.initial_date to yyyy-mm-dd format
         init_ = self.initial_date.strftime('%Y-%m-%d')
         # self.final_date to yyyy-mm-dd format
@@ -55,7 +56,7 @@ class Backtest:
         # Initializing the ptf value list
         rows_pnl = []
         # Run the backtest
-        for t in pd.date_range(start=self.initial_date, end=self.final_date, freq='D'):
+        for t in pd.bdate_range(start=self.initial_date, end=self.final_date, freq='D'):
 
             if self.risk_model is not None:
                 portfolio = info.compute_portfolio(t, info.compute_information(t))
@@ -70,11 +71,15 @@ class Backtest:
                 prices = info.get_prices(t)
                 self.broker.execute_portfolio(portfolio, prices, t)
 
-            rows_pnl.append({'Date': t, 'ptf_value': self.broker.get_portfolio_value(info.get_prices(t))})
+            rows_pnl.append({'date': t, 'ptf_value': self.broker.get_portfolio_value(info.get_prices(t))})
         logging.info(
-            f"Backtest completed. Final portfolio value: {self.broker.get_portfolio_value(info.get_prices(self.final_date)) - self.initial_cash}")
+            f"Backtest completed. Final portfolio value: {self.broker.get_portfolio_value(info.get_prices(self.final_date))}")
         df_transaction_log = self.broker.get_transaction_log()
+        # Computing the daily PnL from daily portfolio value
         df_ptf_value = pd.DataFrame(rows_pnl)
+        df_ptf_value['daily_pnl'] = df_ptf_value['ptf_value'].diff()
+        df_ptf_value['daily_pnl'].fillna(0, inplace=True)
+
         # create transaction log folder if it does not exist
         if not os.path.exists('transaction_logs'):
             os.makedirs('transaction_logs')
@@ -83,42 +88,68 @@ class Backtest:
             os.makedirs('backtests')
 
         # save to parquet, use the backtest name
-        df_transaction_log.to_parquet(f"backtests/{self.backtest_name}.parquet")
+        df_transaction_log.to_parquet(f"transaction_logs/{self.backtest_name}.parquet")
         df_ptf_value.to_parquet(f"backtests/{self.backtest_name}.parquet")
 
         # store the backtest in the blockchain
         self.broker.blockchain.add_block(self.backtest_name, df.to_string())
 
-
-
-
-
-class BacktestAugmented(Backtest):
-    def __init__(self, raw_backtest):
-        super().__init__(
-            initial_date=raw_backtest.initial_date,
-            final_date=raw_backtest.final_date,
-            information_class=raw_backtest.information_class,
-            risk_model=raw_backtest.risk_model,
-            name_blockchain=raw_backtest.name_blockchain,
-            verbose=raw_backtest.verbose,
-        )
-        self.backtest_name = raw_backtest.backtest_name
-        self.chosen_universe = raw_backtest.universe
-        self.raw_backtest = raw_backtest
-
     def get_df_backtest(self):
         # Checks first if the backtest exists; otherwise creating it
-        if len(glob(f"backtests/{self.backtest_name}.csv")) != 1:
-            self.raw_backtest.run_backtest()
-
-
-        df_backtest = pd.read_csv(f"backtests/{self.raw_backtest.backtest_name}.csv")
+        files = glob(f"backtests/{self.backtest_name}.parquet")
+        if len(files) != 1: # if file doesn't exist, generate it
+            self.run_backtest()
+        df_backtest = pd.read_parquet(glob(f"backtests/{self.backtest_name}.parquet"))
         return df_backtest
 
-    def compute_backtest_metrics(self):
-        df_backtest = self.get_df_backtest()
+    def get_backtest_metrics(self, df, risk_free_rate=0.0):
+        # Compute daily return directly from portfolio value
+        df['daily_return'] = df['ptf_value'].pct_change()
+        df['daily_return'] = df['daily_return'].fillna(0) # Handle NaN on first row
 
+        # Compute cumulative returns
+        df['cum_pnl'] = df['ptf_value'] - df['ptf_value'].iloc[0]  # PnL relative to initial value
+
+        # Key statistics
+        total_return = df['ptf_value'].iloc[-1] / df['ptf_value'].iloc[0] - 1  # As a decimal
+        num_days = (df['date'].iloc[-1] - df['date'].iloc[0]).days
+        print(num_days)
+        # Corrected annualized return
+        annualized_return = (1 + total_return) ** (252 / num_days) - 1  # As a decimal
+
+        # Convert to percentage for display
+        annualized_return *= 100
+
+        # Annualized volatility
+        daily_volatility = df['daily_return'].std() * (252 ** 0.5)  # Scale by sqrt(252)
+        annualized_volatility = daily_volatility * np.sqrt(252)
+
+        # Sharpe ratio
+        excess_return = annualized_return - risk_free_rate
+        sharpe_ratio = excess_return / annualized_volatility if annualized_volatility > 0 else np.nan
+
+        # Maximum Drawdown (MDD)
+        df['peak'] = df['cum_pnl'].cummax()
+        df['drawdown'] = df['cum_pnl'] - df['peak']
+        max_drawdown = df['drawdown'].min()
+
+        # Sortino Ratio (using downside deviation)
+        downside_returns = df[df['daily_return'] < 0]['daily_return']
+        downside_volatility = downside_returns.std() * np.sqrt(252)
+        sortino_ratio = excess_return / downside_volatility if downside_volatility > 0 else np.nan
+
+        return pd.DataFrame.from_dict(
+        {
+                "Total Return (%)": 100 * total_return,
+                "Annualized Return (%)": 100 * annualized_return,
+                "Annualized Volatility (%)": annualized_volatility,
+                "Sharpe Ratio": sharpe_ratio,
+                "Sortino Ratio": sortino_ratio,
+                "Maximum Drawdown ($)": max_drawdown,
+            },
+            orient='index',  # Keys become row indices
+            columns=['Value']  # Single column name
+        ).round(2).reset_index(names=['Metric'])
 
 if __name__ == '__main__':
     backtest = Backtest(
@@ -129,4 +160,6 @@ if __name__ == '__main__':
         name_blockchain='backtest',
         verbose=True
     )
-    backtest.run_backtest()
+    df = backtest.get_df_backtest()
+    backtest.get_backtest_metrics(df)
+
