@@ -1,7 +1,7 @@
 import pytest
 import pandas as pd
 from datetime import datetime
-from src.python_project_alban_magerand_203.backtest import Backtest
+from python_project_alban_magerand_203.backtest import Backtest
 from pybacktestchain.broker import StopLoss
 
 def test_get_daily_pnl():

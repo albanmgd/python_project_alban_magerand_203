@@ -5,7 +5,7 @@ import webbrowser
 from utils import *
 import plotly.graph_objs as go
 from dash import dash_table
-from pybacktestchain.data_module import FirstTwoMoments
+from portfolio import PortfolioOptimizer
 from pybacktestchain.broker import Backtest, StopLoss, EndOfMonth
 from datetime import datetime
 from backtest import Backtest
@@ -59,15 +59,32 @@ class BacktestApp:
             ], style={'display': 'flex', 'justify-content': 'space-between', 'margin-bottom': '20px',
                       'background-color': '#34495e', 'padding': '10px', 'border-radius': '5px'}),
 
-            # Single selection for 'ptf construction'
             html.Div([
-                html.Label("Select Portfolio Construction:", ),
-                dcc.RadioItems(
-                    id='ptf-construction',
-                    options=[{'label': option, 'value': option} for option in ptf_construction_options],
-                    value=ptf_construction_options[0],  # Default value
-                )
-            ], style={'margin-bottom': '20px'}),
+                html.Div([
+                    html.Label("Select a way to estimate returns and a lookback period (days):"),
+                    dcc.RadioItems(
+                        id='rtn_estimates',
+                        options=[{'label': option, 'value': option} for option in rtns_estimates_options],
+                        value=rtns_estimates_options[0],  # Default value
+                        style={'display': 'inline-block', 'margin-right': '5px'}
+                    ),
+                    html.Div("over", style={'font-weight': 'bold', 'margin': '0 10px'}),
+                    dcc.Input(id='lookback_period', type='number', value=360, style={'width': '80px', 'padding': '4px'}),
+                    html.Div(" days", style={'font-weight': 'bold', 'margin': '0 10px'}),
+
+                ], style={'display': 'flex', 'align-items': 'flex-start', 'margin-right': '40px'}),
+
+                html.Div([
+                    html.Label("Select an objective function:"),
+                    dcc.RadioItems(
+                        id='obj_fct',
+                        options=[{'label': option, 'value': option} for option in ptf_construction_options],
+                        # placeholder="Choose a utility function",
+                        value=ptf_construction_options[0],  # Default value
+                        style={'display': 'inline-block'}
+                    )
+                ], style={'display': 'flex', 'align-items': 'flex-start', 'margin-right': '40px'})
+            ]),
 
             # Single selection for 'rebalancing flag'
             html.Div([
@@ -91,18 +108,29 @@ class BacktestApp:
                     html.Label("Set stop-loss level (%):"),
                     dcc.Input(id='stoploss', type='number', min=0, max=100, step=0.01, value=10,
                               placeholder="Enter stop-loss", style={'width': '150px'})
-                ], id='stoploss_container', style={'display': 'none', 'margin-left': '20px'})  # Hidden initially
-            ]),
-
-            # Multi-selection for 'universe'
-            html.Div([
-                html.Label("Select Universe:"),
-                dcc.Dropdown(
-                    id='universe',
-                    options=[{'label': option, 'value': option} for option in universe_options],
-                    multi=True
-                )
+                ],
+                    id='stoploss_container', style={'display': 'none', 'margin-left': '20px'})  # Hidden initially
             ], style={'margin-bottom': '20px'}),
+            # Handling the choice of the country
+            html.Div([
+                html.Label("Select a country and one/several stock(s):"),
+
+                html.Div([
+                    dcc.Dropdown(
+                        id='country-dropdown',
+                        options=[{'label': country, 'value': country} for country in universe_options.keys()],
+                        value=list(universe_options.keys())[-1],  # Default to the last country in the dictionary
+                        style={'width': '200px', 'display': 'inline-block'}
+                    ),
+
+                    dcc.Dropdown(
+                        id='stock-dropdown',
+                        multi=True,
+                        placeholder="Choose a stock",
+                        style={'width': '200px', 'display': 'inline-block', 'margin-left': '20px'}
+                    )
+                ])
+            ]),
 
             # Initial Cash Input
             html.Div([
@@ -111,7 +139,7 @@ class BacktestApp:
                     id='initial_cash',
                     type='number',
                     value=1_000_000,  # Default to 1 million
-                    style={'width': '100%', 'padding': '5px'}
+                    style={'width': '80px', 'padding': '5px'}
                 )
             ], style={'margin-bottom': '20px', 'background-color': '#34495e', 'padding': '10px',
                       'border-radius': '5px'}),
@@ -178,19 +206,36 @@ class BacktestApp:
             return {'display': 'inline-block', 'margin-left': '20px'} if selected_model != self.default_risk_model else {
                 'display': 'none'}
 
+        @self.app.callback(
+            Output('stock-dropdown', 'options'),
+            Output('stock-dropdown', 'value'),
+            Input('country-dropdown', 'value')
+        )
+        def update_stock_dropdown(selected_country):
+            if selected_country is None:
+                return [], None  # No options if country isn't selected
+
+            stock_options = [{'label': stock, 'value': stock} for stock in universe_options[selected_country]]
+            default_stock = stock_options[0]['value'] if stock_options else None  # Select first stock by default
+
+            return stock_options, default_stock
+
         # Callback to update the graph of the backtest + show stats when the button is clicked
         @self.app.callback(
             Output('graph_backtest', 'figure'),
             Output('perf_table', 'data'),
             Output('daily_pnl_figure', 'figure'),
+
             Input('launch_backtest', 'n_clicks'),
             State('start_date', 'date'),
             State('end_date', 'date'),
-            State('ptf-construction', 'value'),
+            State('rtn_estimates', 'value'),
+            State('lookback_period', 'value'),
+            State('obj_fct', 'value'),
             State('rebalancing-flag', 'value'),
             State('risk_model', 'value'),
             State('stoploss', 'value'),
-            State('universe', 'value'),
+            State('stock-dropdown', 'value'),
             State('initial_cash', 'value')
         )
         def update_graphs(
@@ -206,6 +251,9 @@ class BacktestApp:
                     risk_model.threshold = pct_sl / 100
                 else:
                     risk_model = None
+
+                inf_class = PortfolioOptimizer()
+
                 backtest = Backtest(
                     initial_date=start_date,
                     final_date=end_date,
