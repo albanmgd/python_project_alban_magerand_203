@@ -2,7 +2,6 @@ import pandas as pd
 import numpy as np
 import logging
 import os
-from portfolio import PortfolioOptimizer
 from pybacktestchain.broker import StopLoss
 from pybacktestchain.data_module import FirstTwoMoments, get_stocks_data, DataModule, Information
 from pybacktestchain.utils import generate_random_name

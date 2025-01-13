@@ -6,7 +6,7 @@ from datetime import timedelta
 from utils import *
 import plotly.graph_objs as go
 from dash import dash_table
-from portfolio import PortfolioOptimizer
+from python_project_alban_magerand_203.portfolio import PortfolioOptimizer
 from pybacktestchain.broker import Broker, Backtest, StopLoss, EndOfMonth
 from datetime import datetime
 from backtest import Backtest
