@@ -9,7 +9,7 @@ from dash import dash_table
 from python_project_alban_magerand_203.portfolio import PortfolioOptimizer
 from pybacktestchain.broker import Broker, Backtest, StopLoss, EndOfMonth
 from datetime import datetime
-from backtest import Backtest
+from python_project_alban_magerand_203.backtest import Backtest
 
 last_bd_date = (datetime.today() - pd.offsets.BusinessDay(n=1)).strftime('%Y-%m-%d') # -1 bd to have close prices
 rebal_flags = {
