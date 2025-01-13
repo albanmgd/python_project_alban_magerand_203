@@ -29,7 +29,8 @@ class Backtest:
     initial_cash: int = 1000000  # Initial cash in the portfolio
     name_blockchain: str = 'backtest'
     verbose: bool = True
-    broker: Broker = Broker(cash=1_000_000, verbose=True)
+    broker: Broker = field(default_factory=lambda: Broker(cash=1000000, verbose=True)) # has to be not-mutable
+
 
     def __post_init__(self):
         self.backtest_name = generate_random_name()

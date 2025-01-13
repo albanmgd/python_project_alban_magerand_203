@@ -1,5 +1,5 @@
 import dash
-from dash import dcc, html, Input, Output, State, callback_context
+from dash import dcc, html, Input, Output, State
 import webbrowser
 from datetime import timedelta
 from python_project_alban_magerand_203.utils import *
@@ -130,7 +130,8 @@ class BacktestApp:
                         multi=True,
                         placeholder="Choose a stock",
                         style={'width': '200px', 'display': 'inline-block', 'margin-left': '20px'}
-                    )
+                    ),
+                    html.Div(id='stock-count', style={'margin-left': '20px', 'display': 'inline-block'})
                 ])
             ]),
 
@@ -218,9 +219,17 @@ class BacktestApp:
                 return [], None  # No options if country isn't selected
 
             stock_options = [{'label': stock, 'value': stock} for stock in universe_options[selected_country]]
-            default_stock = stock_options[0]['value'] if stock_options else None  # Select first stock by default
-
+            default_stock = [stock_options[0]['value']] if stock_options else None  # Select first stock by default
             return stock_options, default_stock
+
+        @self.app.callback(
+            Output('stock-count', 'children'),
+            Input('stock-dropdown', 'value')
+        )
+        def update_stock_count(selected_stocks):
+            if not selected_stocks:
+                return "0 stocks selected"
+            return f"{len(selected_stocks)} stock(s) selected"
 
         # Callback to update the graph of the backtest + show stats when the button is clicked
         @self.app.callback(
