@@ -2,6 +2,7 @@ import pandas as pd
 import numpy as np
 import logging
 import os
+from portfolio import PortfolioOptimizer
 from pybacktestchain.broker import StopLoss
 from pybacktestchain.data_module import FirstTwoMoments, get_stocks_data, DataModule, Information
 from pybacktestchain.utils import generate_random_name
@@ -19,6 +20,8 @@ class Backtest:
     universe: list = field(default_factory=lambda:  ['AAPL', 'NFLX'])
     information_class: type = Information
     s: timedelta = timedelta(days=360)
+    rtn_estimates: str = 'Raw'
+    obj_fct: str = 'Utility'
     time_column: str = 'Date'
     company_column: str = 'ticker'
     adj_close_column: str = 'Adj Close'
@@ -27,7 +30,7 @@ class Backtest:
     initial_cash: int = 1000000  # Initial cash in the portfolio
     name_blockchain: str = 'backtest'
     verbose: bool = True
-    broker = Broker(cash=initial_cash, verbose=verbose)
+    broker: Broker = Broker(cash=1_000_000, verbose=True)
 
     def __post_init__(self):
         self.backtest_name = generate_random_name()
@@ -39,7 +42,7 @@ class Backtest:
             logging.info(f"Retrieving price data for universe")
 
             # self.initial_date to yyyy-mm-dd format
-            init_ = self.initial_date.strftime('%Y-%m-%d')
+            init_ = (self.initial_date -self.s).strftime('%Y-%m-%d') # - s days to get enough data to compute rtns
             # self.final_date to yyyy-mm-dd format
             final_ = self.final_date.strftime('%Y-%m-%d')
             df = get_stocks_data(self.universe, init_, final_)
@@ -53,7 +56,8 @@ class Backtest:
                                           time_column=self.time_column,
                                           company_column=self.company_column,
                                           adj_close_column=self.adj_close_column)
-
+            info.estimate_expected_rtn = self.rtn_estimates
+            info.optim_fct = self.obj_fct
             # Initializing the ptf value list
             rows_pnl= []
             # Run the backtest
@@ -118,10 +122,9 @@ class Backtest:
 
             # Key statistics
             total_return = df['ptf_value'].iloc[-1] / df['ptf_value'].iloc[0] - 1  # As a decimal
-            num_days = (df['date'].iloc[-1] - df['date'].iloc[0]).days
-            print(num_days)
+            num_bdays = len(df) # no duplicates so only counting the nb of business dates
             # Corrected annualized return
-            annualized_return = (1 + total_return) ** (252 / num_days) - 1  # As a decimal
+            annualized_return = (1 + total_return) ** (252 / num_bdays) - 1  # As a decimal
 
             # Convert to percentage for display
             annualized_return *= 100
@@ -132,7 +135,7 @@ class Backtest:
 
             # Sharpe ratio
             excess_return = annualized_return - risk_free_rate
-            sharpe_ratio = excess_return / annualized_volatility if annualized_volatility > 0 else np.nan
+            sharpe_ratio = np.sqrt(252) * (df['daily_return'] - risk_free_rate / 252).mean() / df['daily_return'].std()
 
             # Maximum Drawdown (MDD)
             df['peak'] = df['cum_pnl'].cummax()
@@ -147,7 +150,7 @@ class Backtest:
             return pd.DataFrame.from_dict(
             {
                     "Total Return (%)": 100 * total_return,
-                    "Annualized Return (%)": 100 * annualized_return,
+                    "Annualized Return (%)": annualized_return,
                     "Annualized Volatility (%)": annualized_volatility,
                     "Sharpe Ratio": sharpe_ratio,
                     "Sortino Ratio": sortino_ratio,

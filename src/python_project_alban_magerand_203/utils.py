@@ -3,7 +3,7 @@ import pandas as pd
 from datetime import datetime
 # Used to define variables in one place
 rtns_estimates_options = ['Simple Average', 'EWMA']
-ptf_construction_options = ['Utility', 'Sharpe Ratio']
+opt_fcts = {'Sharpe Ratio': 'sharpe', 'Utility': 'utility'}
 rebalancing_flag_options = ['Daily', 'Weekly', 'Monthly']
 risk_models = ['None', 'StopLoss']
 

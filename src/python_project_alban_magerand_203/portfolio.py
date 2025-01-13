@@ -1,25 +1,28 @@
-# %%
 from pybacktestchain.data_module import DataModule, Information
-import pandas as pd
-from sec_cik_mapper import StockMapper
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 import logging
 from scipy.optimize import minimize
 import numpy as np
+from typing_extensions import override
 
 
 @dataclass
 class PortfolioOptimizer(Information):
-    def compute_portfolio(self, t: datetime, information_set, optim_fct):
+    def __post_init__(self):
+        self.estimate_expected_rtn = None # but are being set in the backtest by default already
+        self.optim_fct = None
+
+    @override
+    def compute_portfolio(self, t: datetime, information_set):
         try:
             mu = information_set['expected_return']
             Sigma = information_set['covariance_matrix']
             n = len(mu)
-            if optim_fct == 'utility':
+            if self.optim_fct == 'utility':
                 gamma = 1  # risk aversion parameter
                 obj = lambda x: -x.dot(mu) + gamma / 2 * x.dot(Sigma).dot(x)
-            elif optim_fct == 'sharpe':
+            elif self.optim_fct == 'sharpe':
                 obj = lambda x: -x.dot(mu)/ np.sqrt(x.dot(Sigma).dot(x))
             else: return {}
             # constraints
@@ -48,7 +51,8 @@ class PortfolioOptimizer(Information):
             logging.warning(e)
             return {k: 1 / len(information_set['companies']) for k in information_set['companies']}
 
-    def compute_information(self, t: datetime, estimate_expected_rtn='Raw'):
+    @override
+    def compute_information(self, t: datetime):
         # Get the data module
         data = self.slice_data(t)
         # the information set will be a dictionary with the data
@@ -59,13 +63,13 @@ class PortfolioOptimizer(Information):
 
         # expected return per company
         data['return'] = data.groupby(self.company_column)[self.adj_close_column].pct_change()  # .mean()
-        if estimate_expected_rtn == 'Raw':
+        if self.estimate_expected_rtn == 'Simple Average':
             # expected return by company
             information_set['expected_return'] = data.groupby(self.company_column)['return'].mean().to_numpy()
-        elif estimate_expected_rtn == 'EMA':
+        elif self.estimate_expected_rtn == 'EWMA':
             information_set['expected_return'] = (
                 data.groupby(self.company_column)['return']
-                .transform(lambda x: x.ewm(span=self.s, adjust=False).mean())
+                .transform(lambda x: x.ewm(span=self.s.days, adjust=False).mean())
                 .to_numpy()
             )
         else: return {}

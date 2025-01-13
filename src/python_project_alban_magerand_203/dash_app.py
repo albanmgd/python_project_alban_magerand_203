@@ -2,11 +2,12 @@ import pandas as pd
 import dash
 from dash import dcc, html, Input, Output, State, callback_context
 import webbrowser
+from datetime import timedelta
 from utils import *
 import plotly.graph_objs as go
 from dash import dash_table
 from portfolio import PortfolioOptimizer
-from pybacktestchain.broker import Backtest, StopLoss, EndOfMonth
+from pybacktestchain.broker import Broker, Backtest, StopLoss, EndOfMonth
 from datetime import datetime
 from backtest import Backtest
 
@@ -16,6 +17,7 @@ rebal_flags = {
     'Weekly': EndOfWeek,
     'Monthly': EndOfMonth
 }
+
 
 class BacktestApp:
     def __init__(self, title='Backtester'):
@@ -78,9 +80,9 @@ class BacktestApp:
                     html.Label("Select an objective function:"),
                     dcc.RadioItems(
                         id='obj_fct',
-                        options=[{'label': option, 'value': option} for option in ptf_construction_options],
+                        options=[{'label': option, 'value': option} for option in opt_fcts.keys()],
                         # placeholder="Choose a utility function",
-                        value=ptf_construction_options[0],  # Default value
+                        value=list(opt_fcts.keys())[0],  # Default value
                         style={'display': 'inline-block'}
                     )
                 ], style={'display': 'flex', 'align-items': 'flex-start', 'margin-right': '40px'})
@@ -239,31 +241,35 @@ class BacktestApp:
             State('initial_cash', 'value')
         )
         def update_graphs(
-                n_clicks, start_date, end_date, ptf_construction, rebalancing_flag, str_risk_model, pct_sl, universe,
+                n_clicks, start_date, end_date, rtn_estimates, lookback_period, obj_fct, rebalancing_flag, str_risk_model, pct_sl, universe,
                 initial_cash
         ):
-            print(pct_sl)
             if n_clicks > 0 and universe:
                 start_date , end_date = datetime.strptime(start_date, "%Y-%m-%d"), datetime.strptime(end_date, "%Y-%m-%d")
                 #   ALL THE PARAMS IN THIS CLASS COULD BE VARIABLES SELECTED BY THE USER
+                if type(universe) == str: #means only one stock selected
+                    universe = [universe]
+
                 if str_risk_model != 'None':
                     risk_model = StopLoss
                     risk_model.threshold = pct_sl / 100
                 else:
                     risk_model = None
 
-                inf_class = PortfolioOptimizer()
-
                 backtest = Backtest(
                     initial_date=start_date,
                     final_date=end_date,
-                    information_class=FirstTwoMoments,
+                    s=timedelta(days=lookback_period),
+                    information_class=PortfolioOptimizer,
+                    rtn_estimates=rtn_estimates,
+                    obj_fct=opt_fcts.get(obj_fct),
                     universe=universe,
                     risk_model=risk_model,
                     rebalance_flag=rebal_flags.get(rebalancing_flag),
                     name_blockchain='dash_backtest',
                     verbose=True,
-                    initial_cash=initial_cash
+                    initial_cash=initial_cash,
+                    broker=Broker(cash=initial_cash, verbose=True)  # re-instantiate to clean positions
                 )
                 df_backtest = backtest.get_df_backtest()
 
@@ -277,6 +283,7 @@ class BacktestApp:
                     data=[go.Scatter(x=df_backtest.date, y=df_backtest['daily_pnl'])],
                     layout=go.Layout(title=f"Daily PnL", xaxis_title="Date", yaxis_title="PnL($)")
                 )
+                del backtest
                 return backtest_fig, df_perf.to_dict(orient='records'), daily_pnl_fig
             else:
                 empty_fig = go.Figure()
