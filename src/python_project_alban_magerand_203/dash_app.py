@@ -5,6 +5,7 @@ import webbrowser
 from datetime import timedelta
 from utils import *
 import plotly.graph_objs as go
+from threading import Timer
 from dash import dash_table
 from portfolio import PortfolioOptimizer
 from pybacktestchain.broker import Broker, Backtest, StopLoss, EndOfMonth
@@ -298,18 +299,15 @@ class BacktestApp:
                 )
                 return empty_fig, [], empty_fig
 
+    @staticmethod
+    def open_browser():
+        webbrowser.open_new("http://127.0.0.1:8050")
+
     def run(self):
-        self.app.run_server(debug=True)
+        Timer(1, self.open_browser).start()
+        self.app.run_server()
 
 
 if __name__ == '__main__':
     app = BacktestApp()
     app.run()
-
-
-# def open_browser():
-#     webbrowser.open_new("http://127.0.0.1:8050")
-# # Run the app
-# if __name__ == '__main__':
-#     # Timer(1, open_browser).start()
-#     app.run_server(debug=True)
