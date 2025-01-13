@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "python_project_alban_magerand_203"
-version = "0.0.1"
+version = "0.0.3"
 description = "Final Project of the Python Programming course of the MSc 203"
 authors = ["Alban Magerand"]
 license = "MIT"

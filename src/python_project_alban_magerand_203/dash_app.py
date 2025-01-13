@@ -1,13 +1,12 @@
-import pandas as pd
 import dash
 from dash import dcc, html, Input, Output, State, callback_context
 import webbrowser
 from datetime import timedelta
-from utils import *
+from python_project_alban_magerand_203.utils import *
 import plotly.graph_objs as go
 from threading import Timer
 from dash import dash_table
-from portfolio import PortfolioOptimizer
+from python_project_alban_magerand_203.portfolio import PortfolioOptimizer
 from pybacktestchain.broker import Broker, Backtest, StopLoss, EndOfMonth
 from datetime import datetime
 from backtest import Backtest
