@@ -1,5 +1,3 @@
-import pytest
-import pandas as pd
 from datetime import datetime
 from python_project_alban_magerand_203.backtest import Backtest
 from pybacktestchain.broker import StopLoss
